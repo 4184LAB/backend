@@ -9,6 +9,9 @@ export const envSchema = z.object({
   POSTGRES_PORT: z.coerce.number().int().positive().default(15432),
 
   DATABASE_URL: z.string().url(),
+
+  JWT_SECRET: z.string().min(1),
+  JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(900),
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

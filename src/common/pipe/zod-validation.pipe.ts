@@ -20,5 +20,7 @@ export class ZodValidationPipe implements PipeTransform {
         })),
       });
     }
+
+    return result.data;
   }
 }
