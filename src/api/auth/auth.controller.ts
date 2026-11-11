@@ -57,13 +57,6 @@ export class AuthController {
     return this.authService.reissue(data.userId);
   }
 
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  @Header('Cache-Control', 'no-store')
-  getProfile(@User() user: RequestUser) {
-    return user;
-  }
-
   @Get('admin')
   @UseGuards(JwtAuthGuard)
   getAdmin(@User() user: RequestUser) {
