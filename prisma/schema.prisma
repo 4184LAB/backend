@@ -18,9 +18,46 @@ model User {
   password  String   @db.VarChar(128)
   name      String   @db.VarChar(100)
   role      Role     @default(USER)
+  posts Post[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("user")
+}
+
+enum BoardType {
+  NOTICE
+  GENERAL
+}
+
+model Post {
+  id          Int          @id @default(autoincrement())
+  type        BoardType
+  title       String       @db.VarChar(200)
+  content     String
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id])
+  attachments Attachment[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([type, deletedAt, id])
+  @@map("post")
+}
+
+model Attachment {
+  id           Int      @id @default(autoincrement())
+  originalName String   @db.VarChar(255)
+  storedName   String   @unique @db.VarChar(255)
+  mimeType     String   @db.VarChar(255)
+  size         Int
+  postId       Int
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@index([postId])
+  @@map("attachment")
 }
