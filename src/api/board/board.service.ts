@@ -6,11 +6,15 @@ import {
 import { BoardType } from '@prisma/client';
 import type { RequestUser } from '../../common/decorators/user.decorator';
 import { PrismaService } from '../../database/prisma.service';
+import { FileService } from '../file/file.service';
 import type { BoardSchema, CommentInput } from './schema/board.schema';
 
 @Injectable()
 export class BoardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly fileService: FileService,
+  ) {}
 
   findAll(type: BoardType, q?: string) {
     const keyword = q?.trim();
@@ -141,7 +145,10 @@ export class BoardService {
       data: { deletedAt: new Date() },
     });
 
-    return { message: '게시글이 삭제되었습니다.' };
+    // soft delete는 Attachment의 onDelete: Cascade를 타지 않으므로 직접 정리한다.
+    const removedFiles = await this.fileService.removeAllFromPost(id);
+
+    return { message: '게시글이 삭제되었습니다.', removedFiles };
   }
 
   // ---- 댓글 (일반 게시글 전용) ----

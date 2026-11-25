@@ -49,6 +49,51 @@ export class FileService {
     }
   }
 
+  /** 저장된 실제 파일을 지운다. 이미 없으면 무시한다. */
+  private async deleteStoredFile(storedName: string) {
+    const filePath = resolve(this.uploadDirectory, basename(storedName));
+
+    await unlink(filePath).catch(() => undefined);
+  }
+
+  /** 게시글에 속한 첨부파일 한 건을 삭제한다. */
+  async removeOneFromPost(postId: number, attachmentId: number) {
+    const attachment = await this.prisma.attachment.findFirst({
+      where: { id: attachmentId, postId },
+      select: { id: true, storedName: true },
+    });
+
+    if (!attachment) {
+      throw new NotFoundException('첨부파일을 찾을 수 없습니다.');
+    }
+
+    await this.prisma.attachment.delete({ where: { id: attachment.id } });
+    await this.deleteStoredFile(attachment.storedName);
+
+    return { message: '첨부파일이 삭제되었습니다.' };
+  }
+
+  /** 게시글의 첨부파일을 모두 삭제한다. 삭제된 건수를 돌려준다. */
+  async removeAllFromPost(postId: number) {
+    const attachments = await this.prisma.attachment.findMany({
+      where: { postId },
+      select: { storedName: true },
+    });
+
+    if (attachments.length === 0) {
+      return 0;
+    }
+
+    await this.prisma.attachment.deleteMany({ where: { postId } });
+    await Promise.all(
+      attachments.map((attachment) =>
+        this.deleteStoredFile(attachment.storedName),
+      ),
+    );
+
+    return attachments.length;
+  }
+
   async findAttachment(filename: unknown) {
     if (
       typeof filename !== 'string' ||

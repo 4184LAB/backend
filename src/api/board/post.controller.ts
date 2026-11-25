@@ -109,4 +109,15 @@ export class PostController {
   ) {
     return this.boardService.removeComment(id, commentId, user);
   }
+
+  @Delete(':id/files/:attachmentId')
+  async removeFile(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('attachmentId', ParseIntPipe) attachmentId: number,
+    @User() user: RequestUser,
+  ) {
+    await this.boardService.assertEditable(BoardType.GENERAL, id, user);
+
+    return this.fileService.removeOneFromPost(id, attachmentId);
+  }
 }

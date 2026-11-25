@@ -80,4 +80,16 @@ export class NoticeController {
 
     return this.fileService.upload(id, file);
   }
+
+  @Delete(':id/files/:attachmentId')
+  @UseGuards(JwtAuthGuard)
+  async removeFile(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('attachmentId', ParseIntPipe) attachmentId: number,
+    @User() user: RequestUser,
+  ) {
+    await this.boardService.assertEditable(BoardType.NOTICE, id, user);
+
+    return this.fileService.removeOneFromPost(id, attachmentId);
+  }
 }
