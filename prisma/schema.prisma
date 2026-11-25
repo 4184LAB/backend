@@ -18,7 +18,8 @@ model User {
   password  String   @db.VarChar(128)
   name      String   @db.VarChar(100)
   role      Role     @default(USER)
-  posts Post[]
+  posts    Post[]
+  comments Comment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -36,9 +37,11 @@ model Post {
   type        BoardType
   title       String       @db.VarChar(200)
   content     String
-  authorId    String
-  author      User         @relation(fields: [authorId], references: [id])
+  // 탈퇴한 회원의 글은 남기고 작성자만 비운다.
+  authorId    String?
+  author      User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
   attachments Attachment[]
+  comments    Comment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -60,4 +63,19 @@ model Attachment {
 
   @@index([postId])
   @@map("attachment")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.VarChar(1000)
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // 탈퇴한 회원의 댓글은 남기고 작성자만 비운다.
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@index([authorId])
+  @@map("comment")
 }

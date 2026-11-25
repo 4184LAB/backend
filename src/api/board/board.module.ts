@@ -10,5 +10,6 @@ import { JwtAuthGuard } from '../auth/jwt/jwt.guard';
   imports: [PrismaModule, FileModule],
   controllers: [NoticeController, PostController],
   providers: [BoardService, JwtAuthGuard],
+  exports: [BoardService],
 })
 export class BoardModule {}

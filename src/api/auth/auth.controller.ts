@@ -29,7 +29,9 @@ import type {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // API 명세: 회원가입 성공 응답은 200 OK.
   @Post('register')
+  @HttpCode(200)
   register(
     @Body(new ZodValidationPipe(registerSchema))
     data: RegisterInput,

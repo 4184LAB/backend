@@ -1,0 +1,276 @@
+================================================================
+ 4184LAB 실행 가이드 (팀 공유용)
+ 작성일: 2026-11-24
+================================================================
+
+[구성]
+  4184LAB/
+  ├─ backend/    NestJS 11 + Prisma 6 + PostgreSQL 16 (REST API, 포트 3001)
+  ├─ frontend/   Next.js 16 홈페이지 (포트 3000) - 모든 데이터와 로그인을 backend API로 처리
+     backend/docs/api-spec.md   API 명세
+     explain.txt, CLAUDE.md     이 문서와 개발 참고 문서 (backend/, frontend/ 양쪽에 같은 파일)
+
+  흐름: 브라우저 → frontend(3000) → backend(3001) → PostgreSQL(Docker, 15432)
+  ※ frontend는 backend가 켜져 있어야 동작합니다. 반드시 backend를 먼저 실행하세요.
+  ※ backend와 frontend는 GitHub 저장소를 따로 둡니다(8단계). 두 저장소를 같은
+    상위 폴더(예: 4184LAB/) 아래에 나란히 clone하면 이 문서의 경로와 같아집니다.
+
+  ※ 이 프로젝트의 backend는 보안 실습용입니다. SQL Injection, 권한 변조(role),
+    계정 존재 여부 노출, 인증 없는 토큰 재발급, 파일 경로 조작 등 일부 취약점은
+    "의도적으로" 남겨 둔 것입니다(코드에 한국어 주석 표시). 외부에 공개된 서버에
+    배포하지 마세요.
+
+
+----------------------------------------------------------------
+ 0. 사전 준비 (최초 1회)
+----------------------------------------------------------------
+  - Node.js 24 이상 (npm 11 포함)      확인: node -v / npm -v
+  - Docker Desktop                      확인: docker --version
+  - Git                                 확인: git --version
+
+  Docker Desktop을 먼저 실행해 두세요. 꺼져 있으면 아래와 같은 오류가 납니다.
+    failed to connect to the docker API ... dockerDesktopLinuxEngine
+
+
+----------------------------------------------------------------
+ 1. backend 환경 변수(.env) 만들기 (최초 1회)
+----------------------------------------------------------------
+  .env 파일은 비밀번호가 들어가므로 git에 올라가지 않습니다(.gitignore 처리).
+  각자 backend/.env.example을 복사해서 만드세요.
+
+    cd backend
+    copy .env.example .env          (PowerShell/cmd)
+    cp .env.example .env            (Git Bash/macOS/Linux)
+
+  .env 작성 예시 (값은 각자 정해도 됩니다. 비밀번호/시크릿은 직접 바꾸세요):
+
+    POSTGRES_USER=lab
+    POSTGRES_PASSWORD=<임의의 비밀번호>
+    POSTGRES_DATABASE=lab
+    POSTGRES_DB=lab
+    POSTGRES_PORT=15432
+    DATABASE_URL=postgresql://lab:<위 비밀번호>@localhost:15432/lab?schema=public
+    JWT_SECRET=<임의의 긴 랜덤 문자열>
+    # PORT=                     (선택, 기본 3001)
+    # JWT_EXPIRES_IN_SECONDS=   (선택, 기본 900초 = 15분)
+
+  참고
+  - POSTGRES_DB는 .env.example에 없지만 꼭 넣으세요. docker-compose.yaml의
+    healthcheck가 ${POSTGRES_DB}를 읽기 때문에, 없으면 경고가 납니다.
+    값은 POSTGRES_DATABASE와 같게 둡니다.
+  - 선택 항목을 "PORT=" 처럼 빈 값으로 두면 0이 되어 기본값이 적용되지 않습니다.
+    쓰지 않을 항목은 주석(#) 처리하세요.
+  - 랜덤 문자열 만들기:
+      node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+  - JWT_SECRET을 팀원과 같게 맞출 필요는 없습니다(각자 로컬 DB를 쓰는 경우).
+
+
+----------------------------------------------------------------
+ 2. 데이터베이스 실행 (Docker)
+----------------------------------------------------------------
+    cd backend
+    docker compose up -d
+    docker compose ps          → STATUS가 "Up ... (healthy)"이면 정상
+
+  - 데이터는 Docker 볼륨(backend_postgres_data)에 저장되어 컨테이너를 꺼도 남습니다.
+  - .env의 DB 계정/비밀번호를 나중에 바꾸면 기존 볼륨에는 반영되지 않습니다.
+    이때는 "docker compose down -v"로 볼륨까지 지운 뒤 다시 up 하세요(데이터 삭제됨).
+
+
+----------------------------------------------------------------
+ 3. backend 설치 및 실행
+----------------------------------------------------------------
+    cd backend
+    npm install                    (최초 1회, package.json이 바뀌었을 때)
+    npx prisma migrate dev         (DB 테이블 생성/갱신 + Prisma Client 생성)
+    npm run start:dev              (개발 모드, 파일 저장 시 자동 재시작)
+
+  - "Nest application successfully started" 가 보이면 정상입니다.
+  - API 주소: http://localhost:3001/api/v1/...   (예: GET /api/v1/notices)
+  - 확인:  curl http://localhost:3001/api/v1/notices   → [] 또는 공지 목록
+  - npm install 중 "install scripts not yet covered by allowScripts" 경고는
+    무시해도 됩니다. Prisma 엔진은 처음 실행할 때 자동으로 내려받습니다.
+  - 그 밖의 명령:
+      npm run build     빌드(dist/)
+      npm run lint      eslint (자동 수정 포함)
+      npx prisma studio DB를 브라우저에서 보기
+
+  이 터미널은 켜 둔 채로, 새 터미널을 열어 다음 단계를 진행하세요.
+
+
+----------------------------------------------------------------
+ 4. frontend 설치 및 실행
+----------------------------------------------------------------
+    cd frontend
+    npm install                    (최초 1회)
+    npm run dev                    → http://localhost:3000
+
+  - backend 주소가 기본값(http://localhost:3001/api/v1)이 아니면
+    frontend/.env.local 에 다음을 넣으세요:
+      BACKEND_API_URL=http://<호스트>:<포트>/api/v1
+  - 현재 Next.js 16.4.3은 실행 시 "알려진 보안 취약점이 있다"는 업그레이드 안내를
+    띄우고 처음 한 번 멈출 수 있습니다. 같은 명령을 다시 실행하면 계속 진행됩니다.
+    (Next.js 업그레이드는 팀에서 따로 결정 필요)
+
+
+----------------------------------------------------------------
+ 5. 처음 사용하기 (관리자 계정)
+----------------------------------------------------------------
+  - DB에 회원이 한 명도 없을 때 "처음 가입한 계정"이 자동으로 관리자가 됩니다.
+    http://localhost:3000/signup 에서 가장 먼저 가입하세요.
+  - 로그인은 이메일이 아니라 "아이디"로 합니다.
+  - 회원가입 화면은 비밀번호 8자 이상만 받습니다. 그보다 짧은 비밀번호(예: admin)
+    계정이 필요하면 backend API로 직접 만드세요(DB가 비어 있으면 자동으로 관리자):
+
+      PowerShell:
+        Invoke-RestMethod -Method Post -Uri http://localhost:3001/api/v1/auth/register `
+          -ContentType "application/json; charset=utf-8" `
+          -Body ([Text.Encoding]::UTF8.GetBytes('{"username":"admin","password":"admin","name":"관리자"}'))
+
+      Git Bash / macOS / Linux:
+        curl -X POST http://localhost:3001/api/v1/auth/register \
+          -H "Content-Type: application/json" \
+          -d '{"username":"admin","password":"admin","name":"admin"}'
+
+    ※ Windows의 curl은 한글을 깨뜨려 보낼 수 있습니다. 한글 이름은 PowerShell 방식을
+      쓰거나, 로그인 후 마이페이지에서 이름을 바꾸세요.
+    ※ admin/admin 같은 쉬운 계정은 로컬 실습용으로만 쓰세요.
+
+  주요 화면
+    /             메인 (최신 공지)
+    /notices      공지사항 - 누구나 열람, 관리자만 작성/수정/삭제, 첨부파일
+    /board        국민참여 게시판 - 로그인 필요, 글/댓글/첨부파일
+    /search       정보공개 검색 - 비로그인: 공지만 / 로그인: 글·댓글 / 관리자: 회원
+    /mypage       내 정보, 이름·비밀번호 변경, 회원 탈퇴
+    /admin        관리자 - 회원 권한 변경, 강제 탈퇴, 게시글 삭제, 통계
+    /tools        개발 도구, 서버 상태(관리자), DB 백업 다운로드(관리자)
+
+  로그인 토큰(JWT)은 15분이면 만료되지만, frontend가 자동으로 재발급하므로
+  다시 로그인할 필요는 없습니다(쿠키는 7일 유지).
+
+
+----------------------------------------------------------------
+ 6. 종료하기
+----------------------------------------------------------------
+  1) frontend 터미널에서 Ctrl + C
+  2) backend 터미널에서 Ctrl + C
+  3) DB 컨테이너 정지 (데이터는 유지):
+       cd backend
+       docker compose stop
+     다시 켤 때는 "docker compose up -d" (또는 "docker compose start")
+
+  - 컨테이너까지 삭제(데이터는 유지):   docker compose down
+  - 데이터까지 모두 삭제(되돌릴 수 없음): docker compose down -v
+  - Ctrl + C 후에도 포트(3000/3001)가 계속 사용 중이면 남은 node 프로세스를
+    종료하세요.
+      PowerShell:
+        Get-NetTCPConnection -State Listen -LocalPort 3000,3001 |
+          ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+
+
+----------------------------------------------------------------
+ 7. 자주 겪는 문제
+----------------------------------------------------------------
+  - frontend에 "백엔드 서버에 연결할 수 없습니다"
+      → backend가 실행 중인지(3단계), BACKEND_API_URL이 맞는지 확인
+  - backend 시작 시 환경 변수 오류(zod)
+      → backend/.env의 필수 키(POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DATABASE,
+        DATABASE_URL, JWT_SECRET)를 확인
+  - Can't reach database server at localhost:15432
+      → Docker Desktop과 "docker compose up -d"를 확인
+  - prisma generate 중 EPERM / 파일 사용 중 오류(Windows)
+      → 실행 중인 backend를 끄고(Ctrl + C) 다시 실행
+  - 포트가 이미 사용 중(EADDRINUSE)
+      → 6단계의 남은 프로세스 종료 방법 참고
+  - 첨부파일은 10MB까지 올릴 수 있습니다. 파일은 backend/uploads/에 저장됩니다
+    (git에 올라가지 않음).
+
+
+================================================================
+ 8. GitHub에 올리기 (push) - backend / frontend 저장소 분리
+================================================================
+  backend와 frontend는 GitHub 저장소를 각각 하나씩, 총 2개로 관리합니다.
+  현재 두 폴더 모두 아직 git 저장소가 아닙니다. 아래 순서대로 진행하세요.
+  저장소 이름은 예시로 4184LAB-backend, 4184LAB-frontend를 씁니다.
+
+  [주의] 올리면 안 되는 파일 (각 폴더의 .gitignore에 이미 들어 있음)
+    backend/.gitignore  : .env, node_modules, dist, uploads
+    frontend/.gitignore : .env*, node_modules, .next, .data
+    → .env에는 DB 비밀번호와 JWT 시크릿이 있습니다. 커밋 전에 꼭 확인하세요.
+    → backend/.env.example은 팀원이 복사해 쓰는 템플릿이므로 올립니다.
+
+  [공용 문서 위치] 저장소가 둘로 나뉘므로 공용 문서는 이렇게 둡니다.
+    - API 명세       : backend/docs/api-spec.md (backend 저장소에만 있음)
+    - explain.txt    : backend/와 frontend/ 양쪽에 같은 파일
+    - CLAUDE.md      : backend/와 frontend/ 양쪽에 같은 파일
+    → explain.txt나 CLAUDE.md를 고치면 두 저장소에 모두 반영해 주세요.
+    → 4184LAB 최상위에 남은 explain.txt, CLAUDE.md는 어느 저장소에도 들어가지
+      않는 로컬 사본입니다.
+
+  ① GitHub에서 새 저장소 2개 만들기
+     github.com → 오른쪽 위 "+" → New repository
+       - 4184LAB-backend
+       - 4184LAB-frontend
+     → Private/Public 선택
+     → "Add a README", ".gitignore", "license"는 체크하지 않고 Create repository
+       (체크하면 첫 push가 거부됩니다)
+     → 각 저장소 주소 복사
+       예: https://github.com/<계정>/4184LAB-backend.git
+           https://github.com/<계정>/4184LAB-frontend.git
+
+  ② (최초 1회) git 사용자 정보 설정
+     git config --global user.name  "이름"
+     git config --global user.email "GitHub에 등록한 이메일"
+
+  ③ backend 저장소 올리기
+     cd C:\Users\<사용자>\Documents\4184LAB\backend
+     git init
+     git branch -M main
+     git add .
+     git status        ← 반드시 확인! .env, node_modules, uploads, dist가 없어야 함
+                         (prisma/migrations/는 올라가야 함 - 팀원 DB 생성에 필요)
+     git commit -m "Initial commit: backend (NestJS + Prisma)"
+     git remote add origin https://github.com/<계정>/4184LAB-backend.git
+     git push -u origin main
+
+  ④ frontend 저장소 올리기
+     cd C:\Users\<사용자>\Documents\4184LAB\frontend
+     git init
+     git branch -M main
+     git add .
+     git status        ← 반드시 확인! .env*, node_modules, .next가 없어야 함
+     git commit -m "Initial commit: frontend (Next.js, backend API 연동)"
+     git remote add origin https://github.com/<계정>/4184LAB-frontend.git
+     git push -u origin main
+
+     만약 git status에 .env가 보이면 커밋하기 전에:
+       git rm --cached .env
+     로 빼고 해당 폴더의 .gitignore를 다시 확인하세요.
+
+     - 처음 push할 때 GitHub 로그인 창이 뜨면 브라우저로 로그인합니다.
+       (비밀번호를 요구하면 계정 비밀번호가 아니라 Personal Access Token을
+        써야 합니다: GitHub → Settings → Developer settings → Personal access tokens)
+
+  ⑤ 이후 변경 사항 올리기 - 바뀐 프로젝트 폴더 안에서 실행
+     cd backend   (또는 cd frontend)
+     git status
+     git add .
+     git commit -m "변경 내용 요약"
+     git push
+
+     - 커밋 하나에는 한 프로젝트의 변경만 담습니다.
+     - backend API를 바꿔서 frontend도 고쳐야 할 때는 두 저장소에 각각 커밋하고,
+       커밋 메시지에 상대 저장소의 변경을 적어 두면 추적하기 쉽습니다.
+       (frontend가 쓰는 API: frontend/src/lib/api.ts, src/lib/queries.ts, src/actions/)
+     - DB 스키마(backend/prisma/schema.prisma)를 바꿨다면
+       "npx prisma migrate dev --name <변경이름>"으로 만든 마이그레이션 폴더도
+       함께 커밋하세요. 팀원은 pull 후 "npx prisma migrate dev"로 반영합니다.
+
+  ⑥ 팀원이 내려받아 실행하기
+     mkdir 4184LAB
+     cd 4184LAB
+     git clone https://github.com/<계정>/4184LAB-backend.git backend
+     git clone https://github.com/<계정>/4184LAB-frontend.git frontend
+     → 이 문서의 1단계(.env 만들기)부터 진행
+       (.env는 저장소에 없으므로 각자 만들어야 합니다)
+     → 최신 코드 받기: 각 폴더에서 "git pull"

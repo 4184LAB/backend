@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -19,8 +20,8 @@ import { User } from '../../common/decorators/user.decorator';
 import type { RequestUser } from '../../common/decorators/user.decorator';
 import { ZodValidationPipe } from '../../common/pipe/zod-validation.pipe';
 import { JwtAuthGuard } from '../auth/jwt/jwt.guard';
-import { boardSchema } from './schema/board.schema';
-import type { BoardSchema } from './schema/board.schema';
+import { boardSchema, commentSchema } from './schema/board.schema';
+import type { BoardSchema, CommentInput } from './schema/board.schema';
 import { BoardService } from './board.service';
 import { FileService } from '../file/file.service';
 
@@ -34,8 +35,11 @@ export class PostController {
 
   @Get()
   @Header('Cache-Control', 'no-store')
-  findAll() {
-    return this.boardService.findAll(BoardType.GENERAL);
+  findAll(@Query('q') q?: string) {
+    return this.boardService.findAll(
+      BoardType.GENERAL,
+      typeof q === 'string' ? q : undefined,
+    );
   }
 
   @Get(':id')
@@ -80,5 +84,29 @@ export class PostController {
     await this.boardService.assertEditable(BoardType.GENERAL, id, user);
 
     return this.fileService.upload(id, file);
+  }
+
+  @Get(':id/comments')
+  @Header('Cache-Control', 'no-store')
+  findComments(@Param('id', ParseIntPipe) id: number) {
+    return this.boardService.findComments(id);
+  }
+
+  @Post(':id/comments')
+  createComment(
+    @Param('id', ParseIntPipe) id: number,
+    @User() user: RequestUser,
+    @Body(new ZodValidationPipe(commentSchema)) data: CommentInput,
+  ) {
+    return this.boardService.createComment(id, data, user);
+  }
+
+  @Delete(':id/comments/:commentId')
+  removeComment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @User() user: RequestUser,
+  ) {
+    return this.boardService.removeComment(id, commentId, user);
   }
 }
